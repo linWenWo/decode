@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片文字嵌入与解码</title>
+    <style>
+        #canvas {
+            display: none;
+        }
+
+        #preview {
+            margin-top: 10px;
+            max-width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>图片文字嵌入与解码</h1>
+    <input type="file" id="imageUpload" accept="image/*"><br>
+    <textarea id="textInput" placeholder="输入文字"></textarea><br>
+    <button id="encodeButton">嵌入文字</button>
+    <button id="decodeButton">解码文字</button><br>
+    <canvas id="canvas"></canvas>
+    <p id="output"></p>
+    <img id="preview" alt="预览">
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const textInput = document.getElementById('textInput');
+        const encodeButton = document.getElementById('encodeButton');
+        const decodeButton = document.getElementById('decodeButton');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const output = document.getElementById('output');
+        const preview = document.getElementById('preview');
+
+        const additionalRows = 10; // 新增行数
+
+        let img = new Image();
+
+        imageUpload.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (event) {
+                img.onload = function () {
+                    canvas.width = img.width;
+                    canvas.height = img.height + additionalRows;
+                    ctx.drawImage(img, 0, 0);
+                }
+                img.src = event.target.result;
+            }
+
+            reader.readAsDataURL(file);
+        });
+
+        encodeButton.addEventListener('click', function () {
+            const encoder = new TextEncoder('utf-8');
+            const text = textInput.value + '\u0000'; // 特殊结束标记
+            const encodedText = encoder.encode(text);
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            let j = 0;
+            for (let i = img.height * canvas.width * 4; i < data.length && j < encodedText.length; i += 4) {
+                data[i] = encodedText[j++];     // R
+                if (j < encodedText.length) data[i + 1] = encodedText[j++]; // G
+                if (j < encodedText.length) data[i + 2] = encodedText[j++]; // B
+                if (j < encodedText.length) data[i + 3] = encodedText[j++]; // A
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            const dataURL = canvas.toDataURL();
+            preview.src = dataURL;
+
+            output.innerHTML = '文字已嵌入图片。';
+        });
+
+        decodeButton.addEventListener('click', function () {
+            const decoder = new TextDecoder('utf-8');
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            let bytes = [];
+
+            for (let i = img.height * canvas.width * 4; i < data.length; i += 4) {
+                if (data[i] === 0) break; // 检查特殊结束标记
+                bytes.push(data[i]);
+                if (data[i + 1] === 0) break;
+                bytes.push(data[i + 1]);
+                if (data[i + 2] === 0) break;
+                bytes.push(data[i + 2]);
+                if (data[i + 3] === 0) break;
+                bytes.push(data[i + 3]);
+            }
+
+            const decodedText = decoder.decode(new Uint8Array(bytes));
+
+            output.innerHTML = '解码出的文字: ' + decodedText;
+        });
+    </script>
+</body>
+
+</html>
